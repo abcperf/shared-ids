@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::hash::Hash;
 
 pub trait AnyId:
@@ -31,23 +34,36 @@ macro_rules! impl_id {
     };
 }
 
+macro_rules! impl_display {
+    ($name:ty) => {
+        impl Display for $name {
+            fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+                write!(f, "({0})", self.0)
+            }
+        }
+    };
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct ReplicaId(u64);
 impl_id!(ReplicaId);
+impl_display!(ReplicaId);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct ClientId(u64);
 impl_id!(ClientId);
+impl_display!(ClientId);
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct RequestId(u64);
 impl_id!(RequestId);
+impl_display!(RequestId);
 
 pub struct IdIter<I: AnyId> {
     next: I,
