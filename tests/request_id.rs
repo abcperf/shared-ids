@@ -1,4 +1,4 @@
-use shared_ids::{AnyId, RequestId};
+use shared_ids::RequestId;
 
 #[test]
 fn ord() {

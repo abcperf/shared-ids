@@ -1,82 +1,85 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
-pub trait AnyId:
-    Debug + PartialEq + Eq + Hash + Clone + Copy + Serialize + for<'a> Deserialize<'a>
-{
-    const FIRST: Self;
-    fn from_u64(id: u64) -> Self;
-    fn as_u64(&self) -> u64;
-    fn as_mut_u64(&mut self) -> &mut u64;
-}
+#[doc(hidden)]
+pub use paste::paste;
 
-macro_rules! impl_id {
-    ($name:ty) => {
-        impl AnyId for $name {
-            const FIRST: Self = Self(0);
-
-            fn from_u64(id: u64) -> Self {
-                Self(id)
-            }
-
-            fn as_u64(&self) -> u64 {
-                self.0
-            }
-
-            fn as_mut_u64(&mut self) -> &mut u64 {
-                &mut self.0
-            }
+#[macro_export]
+macro_rules! id_type {
+    ($vis:vis $name:ident) => {
+        #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+        #[doc(hidden)]
+        $vis struct $name;
+        impl $crate::IdType for $name {
+            const NAME: &'static str = ::std::stringify!($name);
+        }
+        $crate::paste! {
+            $vis type [< $name Id >] = $crate::Id<$name>;
         }
     };
 }
 
-macro_rules! impl_display {
-    ($name:ty) => {
-        impl Display for $name {
-            fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-                write!(f, "({0})", self.0)
-            }
+id_type!(pub Client);
+id_type!(pub Request);
+id_type!(pub Replica);
+
+pub trait IdType: Debug + Clone + Copy + Hash + PartialEq + Eq + PartialOrd + Ord {
+    const NAME: &'static str;
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[repr(transparent)]
+#[serde(transparent, bound = "")]
+pub struct Id<T: IdType> {
+    id: u64,
+    phantom_data: PhantomData<T>,
+}
+
+impl<T: IdType> Id<T> {
+    pub const fn first() -> Self {
+        Self::from_u64(0)
+    }
+
+    pub const fn from_u64(id: u64) -> Self {
+        Self {
+            id,
+            phantom_data: PhantomData,
         }
-    };
-}
+    }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct ReplicaId(u64);
-impl_id!(ReplicaId);
-impl_display!(ReplicaId);
+    pub const fn as_u64(&self) -> u64 {
+        self.id
+    }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct ClientId(u64);
-impl_id!(ClientId);
-impl_display!(ClientId);
-
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct RequestId(u64);
-impl_id!(RequestId);
-impl_display!(RequestId);
-
-pub struct IdIter<I: AnyId> {
-    next: I,
-}
-
-impl<I: AnyId> Default for IdIter<I> {
-    fn default() -> Self {
-        Self { next: I::FIRST }
+    pub fn as_mut_u64(&mut self) -> &mut u64 {
+        &mut self.id
     }
 }
 
-impl<I: AnyId> Iterator for IdIter<I> {
-    type Item = I;
+impl<T: IdType> std::fmt::Display for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}Id({})", T::NAME, self.id)
+    }
+}
+
+impl<T: IdType> std::fmt::Debug for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}Id({})", T::NAME, self.id)
+    }
+}
+
+pub struct IdIter<T: IdType> {
+    next: Id<T>,
+}
+
+impl<T: IdType> Default for IdIter<T> {
+    fn default() -> Self {
+        Self { next: Id::first() }
+    }
+}
+
+impl<T: IdType> Iterator for IdIter<T> {
+    type Item = Id<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.next;
